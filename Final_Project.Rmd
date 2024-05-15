@@ -1,0 +1,279 @@
+---
+title: "Final_Project"
+author: "Andrew Ross"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+The purpose of this script is to analyze data to predict quaternions with different covariates using
+Multivariate analysis 
+
+Import Libraries 
+
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr) # For data manipulation
+library(ggplot2) # for nice visuals
+library(ggpubr) # For nicer normality plots
+library(car) #For Transformations
+library(MVN)
+library(tidyr)
+```
+
+Import Dataset
+
+
+```{r}
+data1 = read.csv("D:\\Stat 9370\\IMU_Data_1.csv")
+data2 = read.csv("D:\\Stat 9370\\IMU_Data_2.csv")
+data3 = read.csv("D:\\Stat 9370\\IMU_Data_3.csv")
+data4 = read.csv("D:\\Stat 9370\\IMU_Data_4.csv")
+test= read.csv("D:\\Stat 9370\\IMU_Data_5.csv") #For testing the model
+```
+
+```{r}
+data = rbind(data1,data2,data3,data4) #combine the data into one
+
+data = data |> select(-Euler_x, -Euler_y, -Euler_z) # Removing Euler because professor said so
+
+#str(data)
+```
+
+16 variables with 120000 observations that are all numeric.
+
+# EDA
+
+# Univariate -------------------------------------------------------------------------------------------
+
+
+```{r}
+for(i in colnames(data)){
+  print(ggplot(data = data, mapping = aes_string(i)) + geom_histogram()+ labs(title = i))
+} #This loop plots histograms for each variable
+```
+
+```{r}
+
+annotate_figure(
+  ggarrange(
+    
+    ggplot(data = data, mapping = aes(x=Quat_0))+geom_histogram() + labs(title = '0') + labs(x = '', y = '') +
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ggplot(data = data, mapping = aes(x=Quat_1))+geom_histogram() + labs(title = '1')+labs(x = '',y = '')+
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ggplot(data = data, mapping = aes(x=Quat_2))+geom_histogram() + labs(title = '2')+labs(x = '',y = '')+
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ggplot(data = data, mapping = aes(x=Quat_3))+geom_histogram() + labs(title = '3')+labs(x = '',y = '')+
+      theme(plot.title = element_text(hjust = 0.5))
+  
+  ), left = text_grob('Count', rot = 90), top = text_grob('Quaternion', face = 'bold', size = 14)
+)
+```
+
+
+```{r, fig.width=9}
+annotate_figure(
+  ggarrange(
+  
+    ggplot(data = data, mapping = aes(x=Gyro_x))+geom_histogram() + labs(title = 'x', x = '', y ='') +
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ggplot(data = data, mapping = aes(x=Gyro_y))+geom_histogram() + labs(title = 'y', x = '', y ='') +
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ggplot(data = data, mapping = aes(x=Gyro_z))+geom_histogram() +labs(title = 'z', x = '', y ='')+
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ncol = 3
+
+  ) , left = text_grob('Count', size = 10, rot = 90), top = text_grob('Gyro', size = 14, face = 'bold')
+)
+
+```
+
+
+```{r}
+annotate_figure(
+  ggarrange(
+  
+    ggplot(data = data, mapping = aes(x=Acc_x))+geom_histogram() + labs(title = 'x', x = '', y ='') +
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ggplot(data = data, mapping = aes(x=Acc_y))+geom_histogram() + labs(title = 'y', x = '', y ='') +
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ggplot(data = data, mapping = aes(x=Acc_z))+geom_histogram() +labs(title = 'z', x = '', y ='')+
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ncol = 3
+
+  ) , left = text_grob('Count', size = 10, rot = 90), top = text_grob('Accelerometer', size = 14, 
+                                                                      face = 'bold')
+)
+```
+
+
+```{r fig.width=7}
+annotate_figure(
+  ggarrange(
+  
+    ggplot(data = data, mapping = aes(x=Mag_x))+geom_histogram() + labs(title = 'x', x = '', y ='') +
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ggplot(data = data, mapping = aes(x=Mag_y))+geom_histogram() + labs(title = 'y', x = '', y ='') +
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ggplot(data = data, mapping = aes(x=Mag_z))+geom_histogram() +labs(title = 'z', x = '', y ='')+
+      theme(plot.title = element_text(hjust = 0.5)),
+    
+    ncol = 3
+
+  ) , left = text_grob('Count', size = 10, rot = 90), top = text_grob('Magnetometer', size = 14, face = 'bold')
+)
+```
+
+
+
+
+ Each Gyro, each acc are visually normally distributed
+
+
+# transformations
+
+Box cox won't work for this because I have negative values in my variables so we try yeo johnson
+
+
+```{r}
+b = boxCox(lm(Mag_x~1, data = data), family="yjPower", plotit = TRUE)
+b$x[which.max(b$y)]
+
+b = boxCox(lm(Mag_y~1, data = data), family="yjPower", plotit = TRUE)
+b$x[which.max(b$y)]
+
+b = boxCox(lm(Mag_z~1, data = data), family="yjPower", plotit = TRUE)
+b$x[which.max(b$y)]
+
+```
+
+```{r}
+hist(data$Mag_x)
+hist(yjPower(data$Mag_x, lambda = 1.030303))
+
+hist(data$Mag_y)
+hist(yjPower(data$Mag_y, lambda = 1.030303))
+
+hist(data$Mag_z)
+hist(yjPower(data$Mag_z, lambda = 0.989899))
+
+
+yjmx = yjPower(data$Mag_x, lambda = 1.030303)
+yjmy = yjPower(data$Mag_y, lambda = 1.030303)
+yjmz = yjPower(data$Mag_z, lambda = 0.989899)
+
+```
+
+
+# Might need to think of different transformation with mag
+
+# Now we proceed with quat
+```{r}
+boxCox(lm(Quat_0~1, data = data), family="yjPower", plotit = TRUE)
+boxCox(lm(Quat_1~1, data = data), family="yjPower", plotit = TRUE)
+boxCox(lm(Quat_2~1, data = data), family="yjPower", plotit = TRUE)
+
+```
+
+
+```{r}
+hist(yjPower(data$Quat_0, lambda = 1))
+qqPlot(yjPower(data$Quat_0, lambda = 1))
+ggqqplot(yjPower(data$Quat_0, lambda = 1))
+
+
+
+hist(yjPower(data$Quat_1, lambda = 0.9))
+qqPlot(yjPower(data$Quat_1, lambda = 0.9))
+
+hist(yjPower(data$Quat_0, lambda = 1))
+qqPlot(yjPower(data$Quat_0, lambda = 1))
+
+
+```
+
+# Bivariate
+
+
+```{r}
+cor(data) # correlation matrix
+
+GGally::ggcorr(data, label = T, hjust = 0.5, label_size = 3, size = 2.5)
+```
+
+welp... no values are correlated with each other.  
+
+```{r}
+pairs(data)
+```
+
+
+# More Stuff 
+
+
+# Modeling
+
+```{r}
+
+mod = lm(cbind(Quat_0, Quat_1, Quat_2, Quat_3)~., data = data)
+
+summary(mod)
+
+hist(mod$residuals, main = 'Density of the Residuals', xlab = 'Residuals')
+
+```
+
+
+```{r}
+Anova(mod)
+
+Anova(yjmod)
+```
+
+
+
+```{r}
+test = test |> select(-Euler_x, -Euler_y, -Euler_z)
+
+obs = test |> select(Quat_0, Quat_1, Quat_2, Quat_3)
+
+obs = obs |> pivot_longer(cols = c(Quat_0, Quat_1, Quat_2, Quat_3), names_to = 'Quat', values_to = 'obs')
+
+pred_mod = predict(mod, newdata = test)
+
+pred_mod = as.data.frame(pred_mod)
+
+pred_mod= pred_mod |> pivot_longer(cols = c(Quat_0, Quat_1, Quat_2, Quat_3), names_to = 'Quat', values_to = 'obs')
+
+
+mse = mean(abs(obs$obs-pred_mod$obs))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
